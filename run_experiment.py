@@ -154,7 +154,8 @@ def parse_args():
     return parser.parse_args()
 
 
-def _add_common_args(cmd: list[str], cfg, include_baselines: bool = True) -> list[str]:
+def _add_common_args(cmd: list[str], cfg, include_models: bool = True,
+                     include_baselines: bool = True) -> list[str]:
     """Append arguments shared by all three stage scripts."""
     cmd.extend([
         "--raw_dir", cfg.raw_dir,
@@ -165,8 +166,9 @@ def _add_common_args(cmd: list[str], cfg, include_baselines: bool = True) -> lis
         "--prediction_horizon_hours", str(cfg.prediction_horizon_hours),
         "--label_window_hours", str(cfg.label_window_hours),
         "--seed", str(cfg.seed),
-        "--models", cfg.models,
     ])
+    if include_models:
+        cmd.extend(["--models", cfg.models])
     if include_baselines:
         cmd.extend(["--baselines", cfg.baselines])
     if cfg.run_subdir:
@@ -187,7 +189,7 @@ def _add_common_args(cmd: list[str], cfg, include_baselines: bool = True) -> lis
 def build_training_command(cfg, repo_root: Path) -> list[str]:
     """Build the training stage command."""
     cmd = [sys.executable, str(repo_root / "training.py")]
-    _add_common_args(cmd, cfg, include_baselines=True)
+    _add_common_args(cmd, cfg, include_models=True, include_baselines=True)
     cmd.extend([
         "--batch_size", str(cfg.batch_size),
         "--epochs", str(cfg.epochs),
@@ -210,7 +212,7 @@ def build_training_command(cfg, repo_root: Path) -> list[str]:
 def build_perturbation_command(cfg, repo_root: Path) -> list[str]:
     """Build the perturbation-test stage command."""
     cmd = [sys.executable, str(repo_root / "scripts" / "run_perturbation_test.py")]
-    _add_common_args(cmd, cfg, include_baselines=False)
+    _add_common_args(cmd, cfg, include_models=True, include_baselines=False)
     cmd.extend([
         "--batch_size", str(cfg.batch_size),
         "--hidden_dim", str(cfg.hidden_dim),
@@ -231,7 +233,7 @@ def build_perturbation_command(cfg, repo_root: Path) -> list[str]:
 def build_stress_command(cfg, repo_root: Path) -> list[str]:
     """Build the stress-test stage command."""
     cmd = [sys.executable, str(repo_root / "scripts" / "run_stress_tests.py")]
-    _add_common_args(cmd, cfg, include_baselines=True)
+    _add_common_args(cmd, cfg, include_models=False, include_baselines=True)
     cmd.extend([
         "--batch_size", str(cfg.batch_size),
         "--retention_levels", cfg.retention_levels,

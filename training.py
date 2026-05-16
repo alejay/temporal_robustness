@@ -11,9 +11,11 @@ from __future__ import annotations
 import argparse
 import json
 import pickle
+import random
 import sys
 from pathlib import Path
 
+import numpy as np
 import torch
 from torch.utils.data import DataLoader
 
@@ -295,14 +297,35 @@ def get_device():
     return device
 
 
-def make_loader(dataset, batch_size, shuffle):
+def set_global_seed(seed: int) -> None:
+    """Seed Python, NumPy, and Torch RNGs for reproducible training runs."""
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
+    try:
+        torch.use_deterministic_algorithms(True)
+    except Exception:
+        pass
+    if hasattr(torch.backends, "cudnn"):
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
+
+
+def make_loader(dataset, batch_size, shuffle, seed: int | None = None):
     """Construct the padded DataLoader shared by model trainers."""
     from datasets.common import pad_collate
+
+    generator = torch.Generator()
+    if seed is not None:
+        generator.manual_seed(int(seed))
 
     return DataLoader(
         dataset,
         batch_size=batch_size,
         shuffle=shuffle,
+        generator=generator if shuffle else None,
         collate_fn=pad_collate,
         num_workers=0,
     )
@@ -331,8 +354,8 @@ def checkpoint_exists(method_name, method_type, out_dir):
 
 def train_methods(cfg, splits, meta, device, out_dir, selected_models, selected_baselines, provenance_dir, git_meta):
     """Train selected methods and optionally attach nested MLflow runs."""
-    train_loader = make_loader(splits["train"], cfg.batch_size, shuffle=True)
-    val_loader = make_loader(splits["val"], cfg.batch_size, shuffle=False)
+    train_loader = make_loader(splits["train"], cfg.batch_size, shuffle=True, seed=cfg.seed)
+    val_loader = make_loader(splits["val"], cfg.batch_size, shuffle=False, seed=cfg.seed)
 
     summary = {"models": {}, "baselines": {}}
 
@@ -430,6 +453,7 @@ def main():
         out_dir = out_dir / cfg.run_subdir
     out_dir.mkdir(parents=True, exist_ok=True)
     device = get_device()
+    set_global_seed(cfg.seed)
 
     print("\n── Loading data ────────────────────────────────────────────────")
     raw_splits, raw_regimes, meta = DATASET_REGISTRY[cfg.dataset].load(cfg)
